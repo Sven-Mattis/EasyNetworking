@@ -10,8 +10,15 @@ import java.util.function.Function;
 
 public class MainServer extends ServerSocket {
 
+    public enum Event{
+        Message_ToAll,
+        Message_To,
+        Connection_Established,
+        Command_Add
+    }
 
-    private final HashMap<String, Function<String, Boolean>> listeners = new HashMap<>();
+
+    private final HashMap<String, Function<Event, Boolean>> listeners = new HashMap<>();
     private final HashMap<String, BiFunction<Socket, String, Boolean>> commands = new HashMap<>();
     protected final HashMap<Socket, Boolean> clients = new HashMap<>();
 
@@ -46,7 +53,7 @@ public class MainServer extends ServerSocket {
                 try {
                     s = this.accept();
                     listeners.forEach( (str, o) -> {
-                        o.apply("Connection:established");
+                        o.apply(Event.Connection_Established);
                     });
                     clients.put(s, s.isConnected());
                     new MiniServer(s, this).start();
@@ -63,7 +70,7 @@ public class MainServer extends ServerSocket {
      */
     public void sendToAll(String msg) {
         listeners.forEach( (str, o) -> {
-            o.apply("Message:sendAll");
+            o.apply(Event.Message_ToAll);
         });
 
         msg += "\n";
@@ -83,7 +90,7 @@ public class MainServer extends ServerSocket {
      */
     public void sendString(Socket s, String msg) throws IOException {
         listeners.forEach( (str, o) -> {
-            o.apply(String.format("Message:sendTo[%s]",s));
+            o.apply(Event.Message_To);
         });
 
         msg += "\n";
@@ -106,7 +113,7 @@ public class MainServer extends ServerSocket {
     public void addCommand (String s, BiFunction<Socket, String, Boolean> f) {
         commands.put(s, f);
         listeners.forEach( (str, o) -> {
-            o.apply(String.format("Command:add[Name:%s{%s}]",s,f));
+            o.apply(Event.Command_Add);
         });
     }
 
@@ -123,7 +130,7 @@ public class MainServer extends ServerSocket {
      * @param name the name to access this listener
      * @param f the function the get executed when it fires any event
      */
-    public void addListener(String name, Function<String, Boolean> f) {
+    public void addListener(String name, Function<Event, Boolean> f) {
         this.listeners.put(name, f);
     }
 
@@ -140,7 +147,7 @@ public class MainServer extends ServerSocket {
      * get all available listener
      * @return the HashMap with all Listener
      */
-    public HashMap<String, Function<String, Boolean>> getAllListeners() {
+    public HashMap<String, Function<Event, Boolean>> getAllListeners() {
         return this.listeners;
     }
 }

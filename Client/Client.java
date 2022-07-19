@@ -1,4 +1,4 @@
-package Client;
+package EasyServer.Client;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -10,9 +10,13 @@ import java.util.function.Function;
 
 public class Client {
 
+    public enum Event {
+        Message_Received;
+    }
+
     private Socket s;
 
-    private HashMap<String, Function<String, Boolean>> eventListeners = new HashMap<>();
+    private HashMap<String, Function<Event, Boolean>> eventListeners = new HashMap<>();
 
     private final ArrayList<String> messages = new ArrayList<>();
     
@@ -28,7 +32,7 @@ public class Client {
                     if(last == 0) {
                         this.messages.add(str);
                         str = "";
-                        eventListeners.forEach( (strrr, f) -> f.apply("Message:received"));
+                        eventListeners.forEach( (strrr, f) -> f.apply(Event.Message_Received));
                     } else
                         str += last;
                 } catch (IOException e) {
@@ -60,7 +64,7 @@ public class Client {
         s.getOutputStream().write(0);
     }
 
-    public void addListener(String key, Function<String, Boolean> f) {
+    public void addListener(String key, Function<Event, Boolean> f) {
         eventListeners.put(key, f);
     }
 
