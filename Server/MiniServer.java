@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 class MiniServer extends Thread {
@@ -15,18 +16,9 @@ class MiniServer extends Thread {
     private final Socket s;
     private final MainServer mainServer;
 
-    protected MiniServer (MainServer mainServer, int port) throws IOException {
-        if(port == mainServer.getLocalPort())
-            throw new BindException("Port not available!");
-
+    protected MiniServer (Socket s, MainServer mainServer) throws IOException {
+        this.s = s;
         this.mainServer = mainServer;
-
-        ServerSocket server = new ServerSocket(port, 50, mainServer.getInetAddress());
-        mainServer.sendString(mainServer.clients.get(port), ""+port+(char) 0);
-        s = server.accept();
-        while(!s.isConnected())
-            continue;
-        mainServer.clients.replace(port, s);
     }
 
     @Override
@@ -34,31 +26,32 @@ class MiniServer extends Thread {
         super.run();
         ArrayList<String> words = new ArrayList<>();
         // Listen to incoming messages
-        new Thread( () -> {
+        try {
+            char lastIn;
+            String word = "";
+            do {
+                lastIn = (char) s.getInputStream().read();
+                if(lastIn == 0) {
+                    words.add(word);
+                    BiFunction<Socket, String, Boolean> f = checkCommand(word.split("\s")[0], mainServer.getCommands());
+                    if (f==null)
+                        mainServer.sendString(s, "No Command found!");
+                    else if(!f.apply(s, word))
+                        mainServer.sendString(s, String.format("An Error occured while excuting Task! --> %s",word));
+                    word = "";
+                } else {
+                    word += lastIn;
+                }
+            } while (true);
+        } catch (IOException e) {
             try {
-                char lastIn;
-                String word = "";
-                do {
-                    lastIn = (char) s.getInputStream().read();
-                    if(lastIn == 0) {
-                        words.add(word);
-                        Function<String, Boolean> f = checkCommand(word.split("\s")[0], mainServer.getCommands());
-                        if (f==null)
-                            mainServer.sendString(s, "No Command found!");
-                        else
-                            if(f.apply(word))
-                                mainServer.sendString(s, String.format("Successfully executed Task! --> %s",word));
-                            else
-                                mainServer.sendString(s, String.format("An Error occured while excuting Task! --> %s",word));
-                        word = "";
-                    } else {
-                        word += lastIn;
-                    }
-                } while (true);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+                Thread.sleep(1000);
+                mainServer.clients.replace(s, s.isConnected());
+                s.close();
+            } catch (InterruptedException | IOException ex) {
+                throw new RuntimeException(ex);
             }
-        }).start();
+        }
     }
 
     /**
@@ -67,9 +60,9 @@ class MiniServer extends Thread {
      * @param commands the list of all possible commands
      * @return a function that need a String and return a Boolean
      */
-    private Function<String, Boolean> checkCommand(String toSearch, HashMap<String, Function<String, Boolean>> commands) {
+    private BiFunction<Socket, String, Boolean> checkCommand(String toSearch, HashMap<String, BiFunction<Socket, String, Boolean>> commands) {
         // Create reference
-        AtomicReference<Function<String, Boolean>> finalF = new AtomicReference<>();
+        AtomicReference<BiFunction<Socket, String, Boolean>> finalF = new AtomicReference<>();
 
         // Check if command exists
         commands.forEach((str, f) -> {

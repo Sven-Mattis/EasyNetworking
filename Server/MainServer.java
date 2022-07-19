@@ -5,19 +5,15 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Function;
-
-import EasyServer.Server.*;
 
 public class MainServer extends ServerSocket {
 
 
     private final HashMap<String, Function<String, Boolean>> listeners = new HashMap<>();
-    private final HashMap<String, Function<String, Boolean>> commands = new HashMap<>();
-
-    protected final HashMap<Integer, Boolean> connections = new HashMap<>();
-    protected final HashMap<Integer, Socket> clients = new HashMap<>();
+    private final HashMap<String, BiFunction<Socket, String, Boolean>> commands = new HashMap<>();
+    protected final HashMap<Socket, Boolean> clients = new HashMap<>();
 
     /**
      * Creates a new Server
@@ -52,29 +48,13 @@ public class MainServer extends ServerSocket {
                     listeners.forEach( (str, o) -> {
                         o.apply("Connection:established");
                     });
-                    int port = getFreePort() | clients.size() + 1001;
-                    clients.put(port, s);
-                    connections.put(port, true);
-                    new MiniServer(this, port).start();
+                    clients.put(s, s.isConnected());
+                    new MiniServer(s, this).start();
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
             }
         }).start();
-    }
-
-    /**
-     * Get a free port out of the list of all clients, if there is no port free create a new one
-     * @return 0 | port
-     */
-    private int getFreePort() {
-        AtomicInteger freePort = new AtomicInteger();
-        clients.forEach((integer, socket) -> {
-            if (!connections.get(integer)) {
-                freePort.set(integer);
-            }
-        });
-        return freePort.get();
     }
 
     /**
@@ -87,11 +67,11 @@ public class MainServer extends ServerSocket {
         });
 
         msg += "\n";
-        msg.chars().forEach(e -> clients.forEach((i, c) -> {
+        msg.chars().forEach(e -> clients.forEach((s, b) -> {
             try {
-                c.getOutputStream().write(e);
+                s.getOutputStream().write(e);
             } catch (IOException ignored) {
-                connections.replace(i, false);
+                clients.replace(s, s.isConnected());
             }
         }));
     }
@@ -101,19 +81,21 @@ public class MainServer extends ServerSocket {
      * @param s the socket to send to
      * @param msg the message as String
      */
-    public void sendString(Socket s, String msg) {
+    public void sendString(Socket s, String msg) throws IOException {
         listeners.forEach( (str, o) -> {
             o.apply(String.format("Message:sendTo[%s]",s));
         });
 
         msg += "\n";
-        msg.chars().forEach(e -> clients.forEach((i, c) -> {
+        msg.chars().forEach((chr) ->{
             try {
-                c.getOutputStream().write(e);
-            } catch (IOException ignored) {
-                connections.replace(i, false);
+                s.getOutputStream().write(chr);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        }));
+        });
+
+        s.getOutputStream().write(0);
     }
 
     /**
@@ -121,7 +103,7 @@ public class MainServer extends ServerSocket {
      * @param s the name of the command, e.g. Test -true --> here Test
      * @param f the function that get executed by this command, requires a String and return a boolean
      */
-    public void addCommand (String s, Function<String, Boolean> f) {
+    public void addCommand (String s, BiFunction<Socket, String, Boolean> f) {
         commands.put(s, f);
         listeners.forEach( (str, o) -> {
             o.apply(String.format("Command:add[Name:%s{%s}]",s,f));
@@ -132,7 +114,7 @@ public class MainServer extends ServerSocket {
      * Get all commands that this Server know
      * @return the HashMap with the Commands
      */
-    public HashMap<String, Function<String, Boolean>> getCommands() {
+    public HashMap<String, BiFunction<Socket, String, Boolean>> getCommands() {
         return commands;
     }
 
