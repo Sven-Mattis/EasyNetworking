@@ -1,4 +1,4 @@
-package Server;
+package EasyServer.Server;
 
 import java.io.IOException;
 import java.net.BindException;

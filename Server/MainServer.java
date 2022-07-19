@@ -1,4 +1,4 @@
-package Server;
+package EasyServer.Server;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -7,6 +7,8 @@ import java.net.Socket;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+
+import EasyServer.Server.*;
 
 public class MainServer extends ServerSocket {
 
